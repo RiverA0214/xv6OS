@@ -125,6 +125,8 @@ found:
   p->pid = allocpid();
   p->state = USED;
 
+  p->priority = 10;  //  MODIFICACIÓN PROYECTO: Inicializar la prioridad, por ejemplo a 10, este es el cambio realizado
+
   // Allocate a trapframe page.
   if((p->trapframe = (struct trapframe *)kalloc()) == 0){
     freeproc(p);
@@ -421,43 +423,67 @@ kwait(uint64 addr)
 //  - swtch to start running that process.
 //  - eventually that process transfers control
 //    via swtch back to the scheduler.
+// kernel/proc.c
+
+// MODIFICACIÓN PROYECTO: Planificador por Prioridades
+// Algoritmo: Itera sobre toda la tabla de procesos para encontrar
+// el proceso RUNNABLE con el valor de 'priority' más alto.
+// Si hay empate, elige el primero encontrado (FCFS entre prioridades iguales).
 void
 scheduler(void)
 {
   struct proc *p;
   struct cpu *c = mycpu();
+  
+  // Puntero para recordar quién es el ganador de la ronda
+  struct proc *best_p = 0;
 
   c->proc = 0;
   for(;;){
-    // The most recent process to run may have had interrupts
-    // turned off; enable them to avoid a deadlock if all
-    // processes are waiting. Then turn them back off
-    // to avoid a possible race between an interrupt
-    // and wfi.
+    // Habilitar interrupciones para evitar bloqueos
     intr_on();
-    intr_off();
 
-    int found = 0;
+    best_p = 0;
+    int max_prio = -1; // Iniciamos con una prioridad muy baja
+
+    // --- FASE 1: Buscar al candidato con la prioridad más alta ---
     for(p = proc; p < &proc[NPROC]; p++) {
-      acquire(&p->lock);
-      if(p->state == RUNNABLE) {
-        // Switch to chosen process.  It is the process's job
-        // to release its lock and then reacquire it
-        // before jumping back to us.
-        p->state = RUNNING;
-        c->proc = p;
-        swtch(&c->context, &p->context);
+      acquire(&p->lock); // Bloqueamos el proceso para mirarlo
 
-        // Process is done running for now.
-        // It should have changed its p->state before coming back.
-        c->proc = 0;
-        found = 1;
+      if(p->state == RUNNABLE) {
+        // ¿Es este proceso más importante que el que teníamos guardado?
+        if(p->priority > max_prio) {
+           
+           // Si ya teníamos un candidato previo, lo soltamos
+           if(best_p != 0){
+              release(&best_p->lock);
+           }
+           
+           // ¡Tenemos un nuevo campeón!
+           best_p = p;
+           max_prio = p->priority;
+           
+           // NO soltamos el lock de 'p' todavía, porque es el elegido
+           continue; 
+        }
       }
+      // Si no es mejor lo soltamos y seguimos buscando
       release(&p->lock);
     }
-    if(found == 0) {
-      // nothing to run; stop running on this core until an interrupt.
-      asm volatile("wfi");
+
+    // --- FASE 2: Ejecutar al ganador (si encontramos alguno) ---
+    if(best_p != 0) {
+      // best_p->lock ya está adquirido desde el ciclo anterior
+      
+      best_p->state = RUNNING;
+      c->proc = best_p;
+      
+      // Cambio de contexto: Aquí el SO salta a ejecutar el programa
+      swtch(&c->context, &best_p->context);
+
+      // --- El programa dejó de correr, volvemos al scheduler ---
+      c->proc = 0;
+      release(&best_p->lock);
     }
   }
 }

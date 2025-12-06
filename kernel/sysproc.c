@@ -107,3 +107,40 @@ sys_uptime(void)
   release(&tickslock);
   return xticks;
 }
+// kernel/sysproc.c
+
+// kernel/sysproc.c
+
+
+// MODIFICACIÓN PROYECTO: System Call para cambiar prioridad
+// Implementación de la llamada al sistema sys_set_priority (syscall #22).
+// Permite a un proceso modificar su propia prioridad dinámicamente.
+// Argumentos:
+//    - priority: Entero entre 0 (baja) y 100 (alta).
+// Retorno:
+//    - 0: Éxito.
+//    - -2: Error (prioridad fuera de rango).
+uint64
+sys_set_priority(void)
+{
+  int priority; // Quitamos 'pid' porque no se usa
+
+  // En xv6-riscv, argint no devuelve errores, solo busca el valor.
+  argint(0, &priority);
+  
+  // Validamos que la prioridad sea lógica (0 a 100)
+  if(priority < 0 || priority > 100)
+    return -2;
+
+  // Aplicamos el cambio al proceso actual
+  struct proc *p = myproc();
+  
+  acquire(&p->lock);
+  p->priority = priority;
+  release(&p->lock);
+
+  // Cedemos la CPU para que el scheduler re-evalúe
+  yield(); 
+
+  return 0;
+}
