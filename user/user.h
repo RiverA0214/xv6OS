@@ -24,6 +24,8 @@ int getpid(void);
 char* sys_sbrk(int,int);
 int pause(int);
 int uptime(void);
+// Parte agregada
+int set_priority(int); 
 
 // ulib.c
 int stat(const char*, struct stat*);
