@@ -195,8 +195,11 @@ def test_usertests(test=""):
     elif test != "":
         opt += " " + test
     q = QEMU(True)
-    q.cmd("usertests" + opt + "\n")
+    q.cmd("time usertests" + opt + "\n")
     q.monitor('^ALL TESTS PASSED', progress='test', timeout=timeout)
+    time.sleep(1)
+    q.read()
+    q.match('Time: .* ticks')
     q.stop()
 
 def main():
